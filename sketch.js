@@ -38,8 +38,12 @@ let input;
 
 var vidDuration = 0;
 
-var LS_val = 100;
-var RS_val = 100;
+var LS_val = 0;
+var RS_val = 0;
+var FS_val = 0;
+var BS_val = 0;
+
+var direction = 0;
 
 
 const socket = new WebSocket('ws://localhost:8766');
@@ -138,58 +142,81 @@ function secondPage(i){
     if(!i) return ;
     
     gui_interaction();
-    
-    
-    
 }
 
 function gui_interaction(){
     drawGui();
     
+    fill('white');
+    textSize(16);
+    let s_int = 'Intensity: ' + calib_slider.val + ' ';
+    text(s_int, windowWidth/2 - 30, windowHeight / 2 - 230, 180, 40);
+    
+    var s_curr = "";
+    
+    if(fblr.val){
+        if(direction == 0) s_curr = 'Current: ' + RS_val + ' ';
+        else if(direction == 1) s_curr = 'Current: ' + FS_val + ' ';
+    }
+    else{
+        if(direction == 0) s_curr = 'Current: ' + RS_val + ' ';
+        else if(direction == 1) s_curr = 'Current: ' + LS_val + ' ';
+    }
+    text(s_curr, windowWidth/2 - 30, windowHeight / 2 - 130, 180, 40);
+    
      if (reset.isPressed) {
     // Print a message when Button is pressed.
         console.log("reset");
-         ble_action = 60;
-         ble_config = 100;
-         ble_location = 0;
-         ble_strength = 0;
-         sendBLEPacket();
+         moveSetting(0,0);
+         
+         clearInterval(waveTimer);
+          ssine.enabled = true;
          
     }
     
     if (togg_left.isPressed) {
     // Print a message when Button is pressed.
         console.log("send left");
-         ble_action = 20;
-         ble_config = 100;
-         ble_location = 0;
-         ble_strength = calib_slider.val;
-        sendBLEPacket();
+        moveSetting(0,calib_slider.val);      
     }
     
     if (togg_right.isPressed) {
     // Print a message when Button is pressed.
         console.log("send right");
-         ble_action = 20;
-         ble_config = 100;
-         ble_location = 1;
-         ble_strength = calib_slider.val;
-        sendBLEPacket();
+         moveSetting(1,calib_slider.val);
+    }
+    
+    if (ssine.isPressed) {
+    // Print a message when Button is pressed.
+        console.log("send left");
+        //moveSetting(0,calib_slider.val);
+       waveTimer =  setInterval(getSample,timeStep);
+       ssine.enabled = false;
     }
     
     if (calib_slider.isChanged) {
     // Print a message when Slider is changed
     // that displays its value.
-    print(calib_slider.label + " = " + calib_slider.val);
+    //print(calib_slider.label + " = " + calib_slider.val);
         //ble_strength = calib_slider.val;
   }
     
-    left_slider.val = LS_val;
-    right_slider.val = RS_val;
     
+    
+    if(fblr.val){
+        togg_left.label = "Forward";
+        togg_right.label = "Backward";
+        left_slider.val = FS_val;
+        right_slider.val = RS_val;
+    }
+    else{
+         togg_left.label = "Left";
+        togg_right.label = "Right";
+        left_slider.val = LS_val;
+        right_slider.val = RS_val;
+    }
     
 }
-
 
 
 function gui_setup(){
@@ -200,7 +227,7 @@ function gui_setup(){
 
     togg_left = createButton("Left", windowWidth/2-300, windowHeight / 2 -100, 200, 100);
     togg_right = createButton("Right", windowWidth/2+100, windowHeight / 2 -100, 200, 100);  
-    calib_slider = createSlider("Intensity", windowWidth/2 - 150, windowHeight / 2 - 200, 300, 32, 40, 100);
+    calib_slider = createSlider("Intensity", windowWidth/2 - 150, windowHeight / 2 - 200, 300, 32, 40, 80);
     calib_slider.isInteger = true;
     ble_strength = calib_slider.val;
     
@@ -212,6 +239,28 @@ function gui_setup(){
     
     ssine = createButton("Sum of Sine", windowWidth/2-300, windowHeight / 2+200, 200, 100);
     reset = createButton("Reset", windowWidth/2+100, windowHeight / 2 +200, 200, 100);  
+    
+    t1 = createToggle("0.16Hz", windowWidth/2-280, windowHeight / 2 + 60, 50, 50);
+    t2 = createToggle("0.33Hz", windowWidth/2-170, windowHeight / 2 + 60, 50, 50);
+    t3 = createToggle("0.43Hz", windowWidth/2-280, windowHeight / 2+120, 50, 50);
+    t4 = createToggle("0.61Hz", windowWidth/2-170, windowHeight / 2+120, 50, 50);
+    
+    fblr = createToggle("LR/FB", windowWidth/2+170, windowHeight / 2+120, 50, 50);
+    
+    smooth = createToggle("Smooth", windowWidth/2+170, windowHeight / 2+60, 50, 50);
+    
+    t1.setStyle({
+    textSize: 14});
+    t2.setStyle({
+    textSize: 14});
+    t3.setStyle({
+    textSize: 14});
+    t4.setStyle({
+    textSize: 14});
+    fblr.setStyle({
+    textSize: 14});
+    smooth.setStyle({
+    textSize: 14});
     
 }
 
@@ -240,7 +289,73 @@ function gui_resize(){
     reset.x = windowWidth / 2 + 100;
     reset.y = windowHeight / 2 + 200;
     
+    t1.x = windowWidth / 2 - 280;
+    t1.y = windowHeight / 2 + 60;
+    
+    t2.x = windowWidth / 2 - 170;
+    t2.y = windowHeight / 2 + 60;
+    
+    t3.x = windowWidth / 2 - 280;
+    t3.y = windowHeight / 2 + 120;
+    
+    t4.x = windowWidth / 2 - 170;
+    t4.y = windowHeight / 2 + 120;
+    
 }
+
+
+//The sum of sines current waveform, with dominant frequencies at 0.16, 0.33, 0.43, 0.61 Hz
+
+var waveTimer = null;
+
+let freq16 = 0.16, freq33 = 0.33 , freq43 = 0.43 , freq61 = 0.61;
+ 
+// Current incrementing sample time 
+var sampleTime = 0;
+
+var sample16 = 0, sample33 = 0 ,sample43 = 0,sample61 = 0;
+// Timer increment 
+let timeStep = 100; // ms
+
+
+
+function getSample() {
+    
+    let amplitude = calib_slider.val - 40;
+    // Calculate current sine value 
+   
+    if (t1.val) sample16 = amplitude * Math.sin(freq16 * sampleTime * (Math.PI * 2));  
+    else sample16 = 0;
+    
+    if (t2.val) sample33 = amplitude * Math.sin(freq33 * sampleTime * (Math.PI * 2));  
+    else sample33 = 0;
+    
+    if (t3.val) sample43 = amplitude * Math.sin(freq43 * sampleTime * (Math.PI * 2));  
+    else sample43 = 0;
+    
+    if (t4.val) sample61 = amplitude * Math.sin(freq61 * sampleTime * (Math.PI * 2));  
+    else sample61 = 0;
+
+    // Increment time  
+    sampleTime += timeStep/1000; 
+    let sample = sample16 + sample33 + sample43 + sample61 ;
+    sendSample(sample);
+}
+
+
+function sendSample(sample){
+  if(sample >=0){ 
+      sinVal = parseInt(sample + 40);
+      moveSetting(0,sinVal);
+  }
+  else{
+       sinVal = parseInt(-1*sample + 40);
+      moveSetting(1,sinVal);
+  }
+    
+}
+
+
 
 
 function connectToBle() {
@@ -286,10 +401,55 @@ function handleNotifications(data) {
     
   LS_val = readarr[1];
   RS_val = readarr[2];
+  FS_val = readarr[3];
+  BS_val = readarr[4];
   //myValue = readarr[6]/256;
 }
 
 function writeToBle() {
+}
+
+
+function moveSetting(dir,val){
+    direction = dir;
+    
+    ble_action = 20;
+    ble_config = 100;
+    ble_location = dir;
+    ble_strength = val;
+    
+    if(fblr.val){
+     ble_config = 200;
+     ble_location = dir + 2;
+    }
+    
+    if(smooth.val){
+        targetIntensity = val;
+        ble_strength = baseIntensity;
+        smoothTimer = setInterval(smoothBLE,smoothTime);
+    }
+    else{
+        sendBLEPacket();
+    }
+}
+
+
+let smoothTime = 50;
+var smoothTimer = null;
+let stepSize = 5;
+let baseIntensity = 40;
+var targetIntensity = 80;
+
+function smoothBLE(){
+    
+    sendBLEPacket();
+    
+    ble_strength = ble_strength + stepSize;
+    
+    if(ble_strength >= targetIntensity + stepSize){
+        clearInterval(smoothTimer);
+    }
+   
 }
 
 
@@ -302,7 +462,7 @@ function sendBLEPacket(){
       console.log(sendDataPacket)
       writeCharacteristic.writeValue(sendDataPacket);
       if(elementIndex == 0){
-        socket.send('MoveU_Trigger');
+        //socket.send('MoveU_Trigger');
       }
     }
     catch(err){
@@ -335,11 +495,14 @@ function keyPressed() {
           writeToBle();
       }
           break;
-    case 'm':
-          videoTrigger();
+    case ',':
+          moveSetting(0,calib_slider.val);  
+          break;
+    case '.':
+          moveSetting(1,calib_slider.val);  
           break;
     case 'r':
-          reset_video();
+          moveSetting(0,0);  
           break;
     case 'g':
           gui_visible = !gui_visible;
