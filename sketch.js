@@ -300,6 +300,12 @@ function gui_resize(){
     
     t4.x = windowWidth / 2 - 170;
     t4.y = windowHeight / 2 + 120;
+
+    fblr.x = windowWidth / 2 + 170;
+    fblr.y = windowHeight / 2 + 120;
+    
+    smooth.x = windowWidth / 2 + 170;
+    smooth.y = windowHeight / 2 + 60;
     
 }
 
